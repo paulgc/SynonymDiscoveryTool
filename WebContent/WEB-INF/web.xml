@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE web-app PUBLIC "-//Sun Microsystems, Inc.//DTD Web Application 2.2//EN" "http://java.sun.com/j2ee/dtds/web-app_2_2.dtd">
+<web-app id="WebApp_ID">
+	<display-name>SynonymDiscoveryTool</display-name>
+	<servlet>
+		<servlet-name>RegexServlet</servlet-name>
+		<display-name>RegexServlet</display-name>
+		<description></description>
+		<servlet-class>edu.wisc.synonymdiscovery.Servlets.RegexServlet</servlet-class>
+	</servlet>
+	<servlet>
+		<servlet-name>ResultServlet</servlet-name>
+		<display-name>ResultServlet</display-name>
+		<description></description>
+		<servlet-class>edu.wisc.synonymdiscovery.Servlets.ResultServlet</servlet-class>
+	</servlet>
+	<servlet>
+		<servlet-name>ReportServlet</servlet-name>
+		<display-name>ReportServlet</display-name>
+		<description></description>
+		<servlet-class>edu.wisc.synonymdiscovery.Servlets.ReportServlet</servlet-class>
+	</servlet>	
+	<servlet-mapping>
+		<servlet-name>RegexServlet</servlet-name>
+		<url-pattern>/RegexServlet</url-pattern>
+	</servlet-mapping>
+	<servlet-mapping>
+		<servlet-name>ResultServlet</servlet-name>
+		<url-pattern>/ResultServlet</url-pattern>
+	</servlet-mapping>
+	<servlet-mapping>
+		<servlet-name>ReportServlet</servlet-name>
+		<url-pattern>/ReportServlet</url-pattern>
+	</servlet-mapping>
+	<welcome-file-list>
+		<welcome-file>index.html</welcome-file>
+		<welcome-file>index.htm</welcome-file>
+		<welcome-file>index.jsp</welcome-file>
+		<welcome-file>default.html</welcome-file>
+		<welcome-file>default.htm</welcome-file>
+		<welcome-file>default.jsp</welcome-file>
+	</welcome-file-list>
+</web-app>

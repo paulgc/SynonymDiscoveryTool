@@ -1,0 +1,427 @@
+<html>
+<title>Synonym Discovery Tool</title>
+<style>
+body {
+	padding-top: 60px;
+	/* 60px to make the container go all the way to the bottom of the topbar */
+}
+</style>
+
+<script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+<script type="text/javascript" src="bootstrap/js/bootstrap.js"></script>
+<link type="text/css" rel="stylesheet"
+	href="bootstrap/css/bootstrap.css" />
+
+<script type="text/javascript">
+	/**
+	 * Processes each message which is logged by the background process that generates candidates	
+	 */
+	function processMessage(msg) {
+		var lines;
+		if (msg.indexOf("<match_count>") != -1) {
+			var cnt = 0;
+			var l;
+			var matchMsg = "Number of extracted matches : <count>";
+			lines = msg.split('\n');
+			for (l in lines) {
+				if (lines[l].trim() == "")
+					continue;
+				if (lines[l].indexOf("<match_count>") != -1) {
+
+					cnt = (lines[l].split(":"))[1].trim();
+					var updText = (document.getElementById('proc_update').innerHTML)
+							.split('\n');
+					document.getElementById('proc_update').innerHTML = (updText
+							.slice(0, updText.length - 2)).join('\n')
+							+ '\n' + matchMsg.replace("<count>", cnt) + '\n';
+				} else {
+					document.getElementById('proc_update').innerHTML += lines[l]
+							+ '\n';
+				}
+			}
+		} else
+			document.getElementById('proc_update').innerHTML += msg;
+	}
+
+	/** Method invoked on clicking submit and calls the servlet which kicks off the background thread
+	 *   for the main candidate generation and ranking process
+	 */
+	function generate_candidates() {
+		document.getElementById('loading').innerHTML = '<img src=images/2.gif>';
+		var rx = document.getElementById('regex').value;
+		var dp = document.getElementById('datapath').value;
+		var multiline = document.getElementById('multiline').checked;
+		var synlength = document.getElementById('synlength').value;
+		var contextLen = document.getElementById('contextword').value;
+		var synWordCount = document.getElementById('synWordCount').value;
+		var anyNumCharBound = document.getElementById('anyNumCharBound').value;
+		var log = document.getElementById('log').checked;
+		var guid = document.getElementById('guid').value;
+		document.getElementById('iter').value = '1';
+		$
+				.get(
+						"RegexServlet",
+						{
+							'action' : "process_match",
+							'regex' : rx,
+							'datapath' : dp,
+							'multiline' : multiline,
+							'synlength' : synlength,
+							'synWordCount' : synWordCount,
+							'contextlen' : contextLen,
+							'anyNumCharBound' : anyNumCharBound,
+							'log' : log,
+							'guid' : guid
+						},
+						function(data) {
+							if (data.complete == "false") {
+								processMessage(data.message);
+								setTimeout(generate_candidates, 10000);
+							} else if (data.complete == "true") {
+								processMessage(data.message);
+								$
+										.get(
+												"ResultServlet",
+												function(data) {
+													document
+															.getElementById('loading').innerHTML = ''
+													var c = 'Please check the true synonyms by examining the matches <br><br>'
+													var drop_down = ''
+													c += ''
+													for (var i = 0; i < data.candidates.length; i++) {
+														//var drdpid='dropdown-'+i
+														var l = data.candidates[i].length
+														var j = 2
+														var matches = '<ul>'
+														for (j = 2; j < data.candidates[i].length; j++) {
+
+															var t1 = data.candidates[i][j]
+																	.toLowerCase()
+															var t2 = t1
+																	.indexOf(data.candidates[i][0])
+															var t3 = t1
+																	.substring(
+																			0,
+																			t2)
+															var t4 = t1
+																	.substring(
+																			t2
+																					+ data.candidates[i][0].length,
+																			t1.length)
+															matches += '<li>'
+																	+ data.candidates[i][j]
+																	+ '</li>'
+														}
+														matches += '</ul>'
+														c += '<input type=checkbox value=\"'+data.candidates[i][0]+'\" id='+'check'+i+'><b>&nbsp;'
+																+ data.candidates[i][0]
+																+ '</b>&nbsp;('
+																+ data.candidates[i][1]
+																+ ')<br>'
+																+ matches
+																+ '<br>'
+													}
+													c += '<br><input class="btn btn-primary" type=button value="Submit Feedback" onclick=post_feedback()><br><br>'
+													document
+															.getElementById('feedback').innerHTML = c
+												}, "json");
+							} else if (data.complete == "fail") {
+								document.getElementById('loading').innerHTML = ''
+								document.getElementById('proc_update').innerHTML += data.message;
+								document.getElementById('proc_update').innerHTML += '\n'
+										+ "Exception in Main Process ! Exited."
+							}
+							document.getElementById("proc_update").scrollTop = document
+									.getElementById("proc_update").scrollHeight;
+						}, "json");
+	}
+
+	/** Method invoked when the feedback is submitted by the user 
+	 *	Collects the feedback from the user input and passes it to send_feedback 
+	 */
+	function post_feedback() {
+		document.getElementById("report").disabled = false;
+		var els = document.getElementById('feedback').getElementsByTagName(
+				'input')
+		var fbk = new Array()
+		var j = 0
+		var fs = ''
+		for (var i = 0; i < els.length; i++) {
+			if (els[i].type == 'checkbox' && els[i].checked) {
+				fbk[els[i].value] = 'y'
+				$('#truesyn ul').append('<li>' + els[i].value + '</li>');
+				if (i > 0)
+					fs += '|'
+				fs += els[i].value;
+				fs += '|y'
+			} else if (els[i].type == 'checkbox') {
+				fbk[els[i].value] = 'n'
+				if (i > 0)
+					fs += '|'
+				fs += els[i].value;
+				fs += '|n'
+			}
+			j += 1
+		}
+
+		send_feedback(fs)
+	}
+
+	/** Method invokes the RegexServlet for the feedback processing
+	 */
+	function send_feedback(fs) {
+
+		var feedbck = fs;
+		var iter = document.getElementById('iter').value;
+		var reqState = document.getElementById('req').value;
+		var log = document.getElementById('log').checked;
+		var guid = document.getElementById('guid').value;
+		document.getElementById('proc_update').focus();
+		$
+				.get(
+						"RegexServlet",
+						{
+							'iter' : iter,
+							'action' : "feedback",
+							'feedback' : fs,
+							'log' : log,
+							'req' : reqState,
+							'guid' : guid
+						},
+						function(data) {
+							document.getElementById('req').value = "OLD";
+							if (data.complete == "false") {
+								document.getElementById('proc_update').innerHTML += data.message;
+								setTimeout(send_feedback(feedbck), 10000);
+							} else if (data.complete == "true") {
+								document.getElementById('proc_update').innerHTML += data.message;
+								document.getElementById('iter').value = data.iter;
+								$
+										.get(
+												"ResultServlet",
+												function(data) {
+													document
+															.getElementById('loading').innerHTML = ''
+													var c = 'Please check the true synonyms by examining the matches <br><br>'
+													var drop_down = ''
+													c += ''
+													for (var i = 0; i < data.candidates.length; i++) {
+														var l = data.candidates[i].length
+														var j = 2
+														var matches = '<ul>'
+														for (j = 2; j < data.candidates[i].length; j++) {
+															var t1 = data.candidates[i][j]
+																	.toLowerCase()
+															var t2 = t1
+																	.indexOf(data.candidates[i][0])
+															var t3 = t1
+																	.substring(
+																			0,
+																			t2)
+															var t4 = t1
+																	.substring(
+																			t2
+																					+ data.candidates[i][0].length,
+																			t1.length)
+															matches += '<li>'
+																	+ data.candidates[i][j]
+																	+ '</li>'
+														}
+														matches += '</ul>'
+														c += '<input type=checkbox value=\"'+data.candidates[i][0]+'\" id='+'check'+i+'><b>&nbsp;'
+																+ data.candidates[i][0]
+																+ '</b>&nbsp;('
+																+ data.candidates[i][1]
+																+ ')<br>'
+																+ matches
+																+ '<br>'
+													}
+													c += '<br><input class="btn btn-primary" type=button value="Submit Feedback" onclick=post_feedback()><br><br>'
+													document
+															.getElementById('feedback').innerHTML = c
+												}, "json")
+							} else if (data.complete == "fail") {
+								document.getElementById('loading').innerHTML = ''
+								document.getElementById('proc_update').innerHTML += data.message;
+								document.getElementById('proc_update').innerHTML += '\n'
+										+ "Exception in Feedback Process ! Exited."
+							}
+							document.getElementById("proc_update").scrollTop = document
+									.getElementById("proc_update").scrollHeight;
+						}, "json");
+	}
+
+	/** Report Generation
+	 */
+	function generate_report() {
+
+		var rx = document.getElementById('regex').value;
+		var dp = document.getElementById('datapath').value;
+		var multiline = document.getElementById('multiline').checked;
+		var synlength = document.getElementById('synlength').value;
+		var contextLen = document.getElementById('contextword').value;
+		var synWordCount = document.getElementById('synWordCount').value;
+		var iter = document.getElementById('iter').value - 1;
+		var anyNumCharBound = document.getElementById('anyNumCharBound').value;
+		var guid = document.getElementById('guid').value;
+		$.get("ReportServlet", {
+			'regex' : rx,
+			'datapath' : dp,
+			'multiline' : multiline,
+			'synlength' : synlength,
+			'synWordCount' : synWordCount,
+			'contextlen' : contextLen,
+			'iter' : iter,
+			'anyNumCharBound' : anyNumCharBound,
+			'guid' : guid
+		}, function(data) {
+			document.write(data);
+		}, "html");
+	}
+
+	function S4() {
+		return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1);
+	}
+
+	function generate_guid() {
+		guid = (S4() + S4() + "-" + S4() + "-4" + S4().substr(0, 3) + "-"
+				+ S4() + "-" + S4() + S4() + S4()).toLowerCase();
+		return guid;
+	}
+
+	/** Initialization method - configures the display of the errors
+	 */
+	function init() {
+		$
+				.ajaxSetup({
+					error : function(xhr, status, error) {
+						document.getElementById('proc_update').innerHTML = "An error occured !";
+						document.getElementById('centerdiv').innerHTML = xhr.responseText;
+						document.getElementById('loading').innerHTML = '';
+					}
+				});
+		document.getElementById('guid').value = generate_guid();
+	}
+</script>
+<body onload="init()">
+
+	<div class="navbar navbar-inverse navbar-fixed-top">
+		<div class="navbar-inner">
+			<div class="container">
+
+				<a class="brand" href="#">Regex Helper</a>
+
+			</div>
+		</div>
+	</div>
+
+	<div id="main" class="container">
+		<form>
+			<b>Enter Regular Expression</b>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input
+				class="input-block-level" type=text id=regex> <br>
+			<div id="exampleregex" style="background-color: #eeeeee">
+				<small>Example :
+					(Phone|\syn)[^a-zA-Z0-9]{0,5}\d{3}.{1,2}\d{3}.{1,2}\d{4}</small>
+			</div>
+			<b>Enter Data Location (File or Folder)</b> &nbsp;&nbsp; <input
+				class="input-block-level" type=text id=datapath> <br>
+			<table style="border-collapse: separate; border-spacing: 6px">
+				<tr style="font-size: small">
+					<td width="15%" title="Does context span over multiple lines?"><input
+						type=checkbox id="multiline"> MultiLine</td>
+					<td width="20%" title="Number of words considered to match context">Number
+						of Context Words</td>
+					<td><div id="dropdown-1" style="float: right">
+							<select style="width: 45px" id="contextword">
+								<option value="1">1</option>
+								<option value="2">2</option>
+								<option value="3">3</option>
+								<option value="4">4</option>
+								<option value="5" selected>5</option>
+								<option value="6">6</option>
+								<option value="7">7</option>
+								<option value="8">8</option>
+								<option value="9">9</option>
+								<option value="10">10</option>
+								<option value="11">11</option>
+								<option value="12">12</option>
+								<option value="13">13</option>
+								<option value="14">14</option>
+								<option value="15">15</option>
+							</select>
+						</div></td>
+
+					<td width="20%" title="Max Number of words in Synonym">Max
+						Number of words in synonym</td>
+					<td><div id="dropdown-1" style="float: right">
+							<select style="width: 45px" id="synWordCount">
+								<option value="1" selected>1</option>
+								<option value="2">2</option>
+								<option value="3">3</option>
+							</select>
+						</div></td>
+
+					<td width="20%" title="Minimum number of characters in the synonym">Min
+						Number of Characters in Synonym</td>
+					<td><div id="dropdown-2" style="float: right">
+							<select style="width: 45px" id="synlength">
+								<option value="1">1</option>
+								<option value="2" selected>2</option>
+								<option value="3">3</option>
+							</select>
+						</div></td>
+
+					<td width="20%"
+						title="Number of words to match (.*) if used in expression">Number
+						of words to match (.*) if used in expression</td>
+					<td><div id="dropdown-3" style="float: right">
+							<select style="width: 45px" id="anyNumCharBound">
+								<option value="None">None</option>
+								<option value="3" selected>3</option>
+								<option value="4">4</option>
+								<option value="5">5</option>
+								<option value="6">6</option>
+								<option value="7">7</option>
+							</select>
+						</div></td>
+				</tr>
+				<tr>
+					<td><input class="btn btn-primary" type=button value=Submit
+						onclick="generate_candidates()"></td>
+					<td><div id="loading"></div></td>
+					<td></td>
+				</tr>
+			</table>
+			<hr>
+			<table width="100%">
+				<tr style="font-size: small">
+					<td width="60%"><div id="status">Status Messages :</div></td>
+					<td width="20%" style="align: left"><input type=checkbox
+						id="log">Enable Logging</td>
+					<td width="20%" style="align: right"><input id="report"
+						class="btn btn-primary" type=button
+						value="Finish and Generate Report" disabled="disabled"
+						onclick="generate_report()"></td>
+				</tr>
+			</table>
+			<br>
+			<textarea readonly style="font-size: small" rows=10
+				class="input-block-level" id="proc_update"></textarea>
+		</form>
+		<hr>
+		<div id=centerdiv>
+			<div id=feedback style="width: 700px; float: left"></div>
+			<div id=truesyn style="float: right">
+				<b> List of synonyms</b><br> <br>
+				<ul>
+				</ul>
+			</div>
+		</div>
+		<input type=hidden id=sid> <input type=hidden id=iter value=1>
+		<input type=hidden id=req value="NEW"> <input type=hidden
+			id=guid value="XXX">
+		<div id=drdw></div>
+	</div>
+</body>
+</html>
